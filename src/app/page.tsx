@@ -1,4 +1,5 @@
 import Nav from "@/components/sections/Nav";
+import ScrollRocket from "@/components/three/ScrollRocket";
 import Hero from "@/components/sections/Hero";
 import LogTicker from "@/components/sections/LogTicker";
 import About from "@/components/sections/About";
@@ -12,6 +13,7 @@ export default function Home() {
   return (
     <>
       <Nav />
+      <ScrollRocket />
       <main>
         <Hero />
         <LogTicker />
