@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion, useScroll, useTransform } from "framer-motion";
+import dynamic from "next/dynamic";
+import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { useLenis } from "lenis/react";
 import { EASE } from "@/components/anim/SplitText";
 import Reveal from "@/components/anim/Reveal";
@@ -9,6 +10,11 @@ import Magnetic from "@/components/anim/Magnetic";
 import { profile } from "@/lib/data";
 
 const HOVER_SPRING = { type: "spring", stiffness: 400, damping: 12 } as const;
+
+// Client-only: WebGL network globe rendered behind the name.
+const HeroScene = dynamic(() => import("@/components/three/HeroScene"), {
+  ssr: false,
+});
 
 /* ——— Interactive name: per-char masked reveal + hover play ——— */
 
@@ -140,6 +146,7 @@ function Decode({ text, delay = 0, className = "" }: DecodeProps) {
 export default function Hero() {
   const sectionRef = useRef<HTMLElement>(null);
   const lenis = useLenis();
+  const reducedMotion = useReducedMotion();
 
   // Suspend the infinite loops (blobs, star, dot, hairline) once the hero
   // scrolls out of view so their rAF work and composited blur layers stop.
@@ -156,28 +163,60 @@ export default function Hero() {
     return () => io.disconnect();
   }, []);
 
+  // The hero is a pinned scroll stage (Apple-style scrub): the inner
+  // viewport sticks while ~1.6 extra viewports of scroll drive the acts —
+  // name exit → globe takes centre stage → particle dissolve.
   const { scrollYProgress } = useScroll({
     target: sectionRef,
     offset: ["start start", "end start"],
   });
 
-  // Name block: slow downward drift, fade, gentle shrink.
-  const nameY = useTransform(scrollYProgress, [0, 1], [0, 160]);
-  const nameOpacity = useTransform(scrollYProgress, [0, 0.9], [1, 0]);
-  const nameScale = useTransform(scrollYProgress, [0, 1], [1, 0.95]);
+  // Act I — name block: drift, fade, gentle shrink.
+  const nameY = useTransform(scrollYProgress, [0, 0.35], [0, 170]);
+  const nameScale = useTransform(scrollYProgress, [0, 0.35], [1, 0.94]);
+  const topY = useTransform(scrollYProgress, [0, 0.15], [0, -40]);
+  const bottomY = useTransform(scrollYProgress, [0, 0.15], [0, 60]);
 
-  // Top / bottom rows fade out faster than the name.
-  const topOpacity = useTransform(scrollYProgress, [0, 0.35], [1, 0]);
-  const topY = useTransform(scrollYProgress, [0, 0.5], [0, -40]);
-  const bottomOpacity = useTransform(scrollYProgress, [0, 0.3], [1, 0]);
-  const bottomY = useTransform(scrollYProgress, [0, 0.5], [0, 60]);
+  // Act II — caption while the globe holds centre stage.
+  const captionY = useTransform(scrollYProgress, [0.34, 0.6], [28, -16]);
+
+  // Scroll-driven opacity fades. Written imperatively because MotionValue
+  // style bindings for non-transform properties don't update under the
+  // React canary bundled with this Next.js — transforms work, opacity
+  // freezes at its initial value.
+  const topFadeRef = useRef<HTMLDivElement>(null);
+  const nameFadeRef = useRef<HTMLDivElement>(null);
+  const bottomFadeRef = useRef<HTMLDivElement>(null);
+  const captionFadeRef = useRef<HTMLParagraphElement>(null);
+  const globeFadeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const ramp = (from: number, to: number, p: number) =>
+      Math.min(1, Math.max(0, (p - from) / (to - from)));
+    const set = (el: HTMLElement | null, v: number) => {
+      if (el) el.style.opacity = String(Math.min(1, Math.max(0, v)));
+    };
+    const apply = (p: number) => {
+      set(topFadeRef.current, 1 - ramp(0, 0.1, p));
+      set(bottomFadeRef.current, 1 - ramp(0, 0.1, p));
+      set(nameFadeRef.current, 1 - ramp(0.04, 0.26, p));
+      set(
+        captionFadeRef.current,
+        Math.min(ramp(0.34, 0.42, p), 1 - ramp(0.52, 0.6, p))
+      );
+      set(globeFadeRef.current, 1 - ramp(0.6, 0.74, p));
+    };
+    apply(scrollYProgress.get());
+    return scrollYProgress.on("change", apply);
+  }, [scrollYProgress]);
 
   return (
     <section
       id="hero"
       ref={sectionRef}
-      className="relative flex min-h-svh flex-col justify-between overflow-hidden px-6 pt-28 pb-10 md:px-12 lg:px-20"
+      className={`relative ${reducedMotion ? "" : "h-[260vh]"}`}
     >
+      <div className="sticky top-0 flex min-h-svh flex-col justify-between overflow-hidden px-6 pt-28 pb-10 md:px-12 lg:px-20">
       {/* ——— Background: aurora blobs + vignette ——— */}
       <motion.div
         aria-hidden
@@ -232,9 +271,38 @@ export default function Hero() {
         <div className="absolute inset-0 [background:radial-gradient(ellipse_60%_55%_at_50%_50%,transparent_0%,rgba(7,7,7,0.65)_100%)]" />
       </motion.div>
 
+      {/* ——— Background: network globe (three.js), scroll-scrubbed ——— */}
+      <div
+        ref={globeFadeRef}
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+      >
+        <motion.div
+          className="h-full w-full"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 1.8, delay: 0.7, ease: EASE }}
+        >
+          <HeroScene progress={scrollYProgress} />
+        </motion.div>
+      </div>
+
+      {/* ——— Act II caption: appears while the globe holds centre stage ——— */}
+      <motion.p
+        ref={captionFadeRef}
+        aria-hidden
+        className="pointer-events-none absolute bottom-[15%] left-1/2 z-10 text-center font-mono text-[10px] uppercase tracking-[0.3em] text-muted opacity-0 md:text-xs"
+        style={{ x: "-50%", y: captionY }}
+      >
+        <span className="text-accent">/</span> Systems, end to end
+        <span className="mt-2 block text-[0.85em] text-muted/70">
+          Go · React · AI infra · 99.99% uptime
+        </span>
+      </motion.p>
+
       <div className="relative z-10 mx-auto flex w-full max-w-[1600px] flex-1 flex-col justify-between">
         {/* ——— Top row ——— */}
-        <motion.div style={{ opacity: topOpacity, y: topY }}>
+        <motion.div ref={topFadeRef} style={{ y: topY }}>
           <motion.div
             className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3"
             initial={{ opacity: 0, y: -16 }}
@@ -262,8 +330,9 @@ export default function Hero() {
 
         {/* ——— Center: the name ——— */}
         <motion.div
+          ref={nameFadeRef}
           className="flex flex-1 items-center will-change-transform"
-          style={{ y: nameY, opacity: nameOpacity, scale: nameScale }}
+          style={{ y: nameY, scale: nameScale }}
         >
           <h1 className="w-full font-display text-[clamp(4rem,15vw,16rem)] uppercase leading-[0.85] tracking-tight">
             <NameLine
@@ -299,7 +368,7 @@ export default function Hero() {
         </motion.div>
 
         {/* ——— Bottom row ——— */}
-        <motion.div style={{ opacity: bottomOpacity, y: bottomY }}>
+        <motion.div ref={bottomFadeRef} style={{ y: bottomY }}>
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-8">
             <Reveal delay={0.6} y={32}>
               <p className="max-w-xs font-mono text-[10px] uppercase tracking-[0.3em] text-muted md:text-xs">
@@ -359,6 +428,7 @@ export default function Hero() {
           transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
         />
       </motion.div>
+      </div>
     </section>
   );
 }

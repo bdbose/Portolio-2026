@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { useLenis } from "lenis/react";
 import SplitText, { EASE } from "@/components/anim/SplitText";
@@ -7,6 +8,11 @@ import Reveal from "@/components/anim/Reveal";
 import Magnetic from "@/components/anim/Magnetic";
 import Parallax from "@/components/anim/Parallax";
 import { profile } from "@/lib/data";
+
+// Client-only: WebGL constellation drifting behind the closing statement.
+const ContactScene = dynamic(() => import("@/components/three/ContactScene"), {
+  ssr: false,
+});
 
 const links = [
   {
@@ -58,6 +64,18 @@ export default function Contact() {
           />
         </Parallax>
       </div>
+
+      {/* Drifting constellation (three.js), masked so it melts into the bg */}
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 mask-[radial-gradient(85%_65%_at_50%_38%,black,transparent)]"
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true, margin: "-15% 0px" }}
+        transition={{ duration: 1.8, ease: EASE }}
+      >
+        <ContactScene />
+      </motion.div>
 
       <div className="relative mx-auto max-w-[1600px] px-6 md:px-12 lg:px-20">
         {/* Label */}
