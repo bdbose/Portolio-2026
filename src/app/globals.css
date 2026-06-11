@@ -89,6 +89,14 @@ body {
   animation: grain 8s steps(10) infinite;
 }
 
+/* The animated full-screen grain is a constant repaint — hold it still on
+   small / touch screens where it costs the most and helps the least. */
+@media (max-width: 820px), (pointer: coarse) {
+  .grain {
+    animation: none;
+  }
+}
+
 @keyframes grain {
   0%, 100% { transform: translate(0, 0); }
   10% { transform: translate(-5%, -10%); }

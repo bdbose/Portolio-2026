@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Canvas } from "@react-three/fiber";
 import { useReducedMotion } from "framer-motion";
+import { useIsMobile } from "@/components/useIsMobile";
 
 type SceneCanvasProps = {
   children: ReactNode;
@@ -23,6 +24,7 @@ export default function SceneCanvas({
   const wrapRef = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(false);
   const reduced = useReducedMotion();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -39,10 +41,16 @@ export default function SceneCanvas({
     <div ref={wrapRef} className={className} aria-hidden>
       <Canvas
         frameloop={reduced ? "demand" : inView ? "always" : "never"}
-        dpr={[1, 1.75]}
+        // Mobile GPUs choke on high pixel ratios + MSAA when every point is
+        // additively blended — cap the ratio and drop antialiasing on phones.
+        dpr={isMobile ? [1, 1.25] : [1, 1.75]}
         flat
         camera={camera}
-        gl={{ alpha: true, antialias: true, powerPreference: "high-performance" }}
+        gl={{
+          alpha: true,
+          antialias: !isMobile,
+          powerPreference: "high-performance",
+        }}
       >
         {children}
       </Canvas>

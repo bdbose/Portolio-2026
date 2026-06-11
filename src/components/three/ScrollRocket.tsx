@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useReducedMotion, useScroll } from "framer-motion";
+import { useIsMobile } from "@/components/useIsMobile";
 
 // Client-only: WebGL rocket that rides the page scroll.
 const RocketScene = dynamic(() => import("./RocketScene"), { ssr: false });
@@ -16,11 +17,12 @@ const RocketScene = dynamic(() => import("./RocketScene"), { ssr: false });
  */
 export default function ScrollRocket() {
   const reduced = useReducedMotion();
+  const isMobile = useIsMobile();
   const wrapRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll();
 
   useEffect(() => {
-    if (reduced) return;
+    if (reduced || isMobile) return;
     const apply = (p: number) => {
       const el = wrapRef.current;
       if (!el) return;
@@ -30,9 +32,11 @@ export default function ScrollRocket() {
     };
     apply(scrollYProgress.get());
     return scrollYProgress.on("change", apply);
-  }, [scrollYProgress, reduced]);
+  }, [scrollYProgress, reduced, isMobile]);
 
-  if (reduced) return null;
+  // The scroll-companion rocket is a second full-page WebGL context. Skip it
+  // on phones/tablets — one canvas (the hero globe) is plenty for mobile GPUs.
+  if (reduced || isMobile) return null;
 
   return (
     <div

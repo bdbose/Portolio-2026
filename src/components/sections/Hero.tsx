@@ -7,6 +7,7 @@ import { useLenis } from "lenis/react";
 import { EASE } from "@/components/anim/SplitText";
 import Reveal from "@/components/anim/Reveal";
 import Magnetic from "@/components/anim/Magnetic";
+import { useIsMobile } from "@/components/useIsMobile";
 import { profile } from "@/lib/data";
 
 const HOVER_SPRING = { type: "spring", stiffness: 400, damping: 12 } as const;
@@ -147,6 +148,7 @@ export default function Hero() {
   const sectionRef = useRef<HTMLElement>(null);
   const lenis = useLenis();
   const reducedMotion = useReducedMotion();
+  const isMobile = useIsMobile();
 
   // Suspend the infinite loops (blobs, star, dot, hairline) once the hero
   // scrolls out of view so their rAF work and composited blur layers stop.
@@ -162,6 +164,10 @@ export default function Hero() {
     io.observe(el);
     return () => io.disconnect();
   }, []);
+
+  // The big blurred aurora blobs are the most expensive thing to repaint on
+  // mobile — keep them static there and only run the drift loops on desktop.
+  const blobsActive = heroInView && !isMobile;
 
   // The hero is a pinned scroll stage (Apple-style scrub): the inner
   // viewport sticks while ~1.6 extra viewports of scroll drive the acts —
@@ -226,9 +232,9 @@ export default function Hero() {
         transition={{ duration: 1.8, delay: 0.5, ease: EASE }}
       >
         <motion.div
-          className="absolute -top-[12%] -left-[8%] aspect-square w-[44vw] rounded-full bg-accent/15 blur-[120px] will-change-transform"
+          className="absolute -top-[12%] -left-[8%] aspect-square w-[44vw] rounded-full bg-accent/15 blur-[70px] will-change-transform md:blur-[120px]"
           animate={
-            heroInView
+            blobsActive
               ? { x: [0, 90, 0], y: [0, 60, 0], scale: [1, 1.18, 1] }
               : { x: 0, y: 0, scale: 1, transition: { duration: 0.6 } }
           }
@@ -240,9 +246,9 @@ export default function Hero() {
           }}
         />
         <motion.div
-          className="absolute top-[30%] -right-[14%] aspect-square w-[38vw] rounded-full bg-accent/10 blur-[120px] will-change-transform"
+          className="absolute top-[30%] -right-[14%] aspect-square w-[38vw] rounded-full bg-accent/10 blur-[70px] will-change-transform md:blur-[120px]"
           animate={
-            heroInView
+            blobsActive
               ? { x: [0, -110, 0], y: [0, -70, 0], scale: [1, 1.12, 1] }
               : { x: 0, y: 0, scale: 1, transition: { duration: 0.6 } }
           }
@@ -254,9 +260,9 @@ export default function Hero() {
           }}
         />
         <motion.div
-          className="absolute -bottom-[18%] left-[28%] aspect-square w-[40vw] rounded-full bg-accent/[0.08] blur-[140px] will-change-transform"
+          className="absolute -bottom-[18%] left-[28%] aspect-square w-[40vw] rounded-full bg-accent/[0.08] blur-[80px] will-change-transform md:blur-[140px]"
           animate={
-            heroInView
+            blobsActive
               ? { x: [0, 70, 0], y: [0, -50, 0], scale: [1.05, 0.95, 1.05] }
               : { x: 0, y: 0, scale: 1.05, transition: { duration: 0.6 } }
           }
